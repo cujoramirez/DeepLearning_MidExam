@@ -76,6 +76,8 @@ See `problem1_outputs/final/test_metrics.json` for full results.
 - 300 checkpoint visualizations documenting convergence
 - Generator evolved from noise to recognizable pine tree structures
 
+![GAN Training Progression (Epochs 1-3000)](gan.gif)
+
 **Fake Detection Classifier:**
 | Metric     | Value  |
 |------------|--------|
