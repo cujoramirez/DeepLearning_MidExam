@@ -40,7 +40,8 @@ deeplearning/
 │   │   ├── confusion_matrix.png
 │   │   ├── samples_epoch_*.png  # 300 epoch snapshots
 │   │   └── gan_training_analysis.txt
-│   └── generated/              # 500 synthetic pine tree images
+│   ├── generated/              # 500 synthetic images (.npy format)
+│   └── generated_png/          # PNG versions of generated images
 └── Room-Climate-Datasets/      # Input data (not included)
 ```
 
@@ -111,6 +112,13 @@ python case1.py --epochs 60 --tune-epochs 40 --final-epochs 120 --seq-len 48
 ```bash
 python case2.py --epochs 3000 --comparison-count 10
 ```
+
+### Converting Generated Images to PNG
+The generated images are saved in `.npy` format by default. To convert them to PNG:
+```bash
+python npy2png.py
+```
+This reads from `problem2_outputs/generated/` and outputs to `problem2_outputs/generated_png/`.
 
 ### Quick Test (Lightweight)
 ```bash
