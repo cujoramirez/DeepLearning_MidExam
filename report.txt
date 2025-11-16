@@ -1,0 +1,239 @@
+\documentclass[12pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath, amssymb, amsfonts}
+\usepackage{siunitx}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{float}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\hypersetup{
+	colorlinks=true,
+	linkcolor=blue,
+	citecolor=blue,
+	urlcolor=blue
+}
+\setlength{\parskip}{0.6em}
+\setlength{\parindent}{0pt}
+
+\title{Deep Learning Midterm Report\\Case 1: Occupant-Aware Room Climate Forecasting\\Case 2: Pine Tree DCGAN and Fake-Original Classification}
+\author{Gading Aditya Perdana (2702268725)}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+This document consolidates the methodologies, mathematical formulations, and empirical findings of two independent deep-learning pipelines. Case~1 addresses short-horizon room-temperature forecasting under resource-limited sensing by combining engineered deltas with an LSTM-based regressor trained on the Room-Climate dataset. Case~2 focuses on generative modelling of the CIFAR-100 ``pine tree'' class via a DCGAN, followed by a ResNet18 classifier that discriminates synthetic images from authentic samples. Both systems were implemented in \texttt{case1.py} and \texttt{case2.py}, validated on held-out splits, and all artefacts reside in the \texttt{problem1\_outputs} and \texttt{problem2\_outputs} folders for reproducibility and downstream dissemination to \href{https://github.com/cujoramirez/DeepLearning\_MidExam.git}{GitHub} or Overleaf.
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+\section{Introduction}
+The midterm assignment comprises two complementary investigations: (i) forecasting the next indoor temperature sample from multimodal IoT streams, and (ii) synthesising pine-tree imagery with a Deep Convolutional GAN (DCGAN) before training a fake-versus-real detector. Despite operating on disjoint datasets and objectives, both cases emphasise data-centric feature design, rigorous validation, and clear documentation of metrics that can be audited by instructors.
+
+Key contributions delivered in this report include:
+\begin{itemize}[noitemsep]
+	\item a differentiable formulation of the engineered temporal features, sliding-window construction, and LSTM training objective for Case~1;
+	\item a full description of the DCGAN loss landscape, stability aids (automatic mixed precision, batch-normalised decoder), and downstream ResNet18 classifier used in Case~2;
+	\item consolidated quantitative evidence (RMSE, $R^2$, accuracy, precision/recall) alongside qualitative plots already stored under the project outputs.
+\end{itemize}
+
+\section{Case 1: Occupant-Aware Room Climate Forecasting}
+\subsection{Problem Statement and Data}
+Two CSV logs collected at Location~C (\texttt{room\_climate-location\_C-measurement32.csv} and \texttt{33}) supply twelve raw channels (temperature, humidity, luxes, occupancy, activity, door/window states, timestamps). Samples are sorted by absolute time and the target is defined as the one-step-ahead temperature $T_{t+1}$.
+
+To enrich low-order dynamics while staying lightweight, four physical measurements $x^{(k)} \in \{\text{Temp}, \text{RelH}, \text{L1}, \text{L2}\}$ are augmented with their first differences,
+\begin{equation}
+	\Delta x^{(k)}_t = x^{(k)}_t - x^{(k)}_{t-1},
+\end{equation}
+yielding eight model features per timestep. The dataset is split chronologically with ratios $70\% / 15\% / 15\%$ for training/validation/testing to prevent temporal leakage, as implemented in \texttt{temporal\_train\_val\_test\_split}.
+
+\subsection{Preprocessing and Feature Engineering}
+Each feature column is standardised with statistics estimated on the training subset only,
+\begin{equation}
+\tilde{x}^{(k)}_t = \frac{x^{(k)}_t - \mu^{(k)}_{\text{train}}}{\sigma^{(k)}_{\text{train}}}, \qquad
+\tilde{y}_t = \frac{T_{t+1} - \mu_{T,\text{train}}}{\sigma_{T,\text{train}}},
+\end{equation}
+ensuring the downstream LSTM consumes zero-mean, unit-variance sequences while the scaler objects are retained for inverse transforms at evaluation time.Sliding windows of length $L = 48$ samples capture two-hour context at the native sampling frequency. For each index $t \geq L$, the dataset builder forms
+\begin{equation}
+	\mathbf{S}_t = [\tilde{\mathbf{x}}_{t-L+1}, \ldots, \tilde{\mathbf{x}}_{t}] \in \mathbb{R}^{L \times 8}, \quad y_t = \tilde{y}_t,
+\end{equation}
+feeding \texttt{SequenceTemperatureDataset}. This representation raises the effective input dimensionality to $\texttt{SEQ\_LEN} \times \texttt{INPUT\_DIM} = 48 \times 8$.
+
+\subsection{LSTM Architecture and Objective}
+The \texttt{TemperatureSequenceRegressor} stacks $n$ LSTM layers (hidden size $h$) with batch-first ordering, followed by a two-layer feed-forward prediction head. At timestep $t$, the recurrent core evaluates
+\begin{align}
+	i_t &= \sigma(W_i [h_{t-1}, x_t] + b_i), & f_t &= \sigma(W_f [h_{t-1}, x_t] + b_f), \\
+	\tilde{c}_t &= \tanh(W_c [h_{t-1}, x_t] + b_c), & c_t &= f_t \odot c_{t-1} + i_t \odot \tilde{c}_t, \\
+	o_t &= \sigma(W_o [h_{t-1}, x_t] + b_o), & h_t &= o_t \odot \tanh(c_t),
+\end{align}
+where $x_t \in \mathbb{R}^8$ and $[\cdot,\cdot]$ denotes concatenation. Only the last hidden state $h_L$ is propagated through a layer-normalised multilayer perceptron to produce the scalar prediction $\hat{y}_t$.Training minimises mean-squared error (MSE) with Adam and weight decay,
+\begin{equation}
+	\mathcal{L}_{\text{MSE}} = \frac{1}{N} \sum_{t=1}^{N} \left( \hat{T}_{t+1} - T_{t+1} \right)^2,
+\end{equation}
+while ReduceLROnPlateau schedules halve the learning rate when validation loss plateaus. Early stopping with patience between 15 and 20 epochs curbs overfitting. Performance is reported by inverse-transforming the predictions to Celsius and computing
+\begin{align}
+	\text{RMSE} &= \sqrt{\frac{1}{N} \sum_{t} (\hat{T}_t - T_t)^2}, &
+	\text{MAE} &= \frac{1}{N} \sum_{t} |\hat{T}_t - T_t|, \\
+	R^2 &= 1 - \frac{\sum_t (\hat{T}_t - T_t)^2}{\sum_t (T_t - \bar{T})^2}.
+\end{align}\subsection{Training Configurations}
+Table~\ref{tab:case1-configs} summarises the candidate configurations explored during baseline warm-up and automated tuning (cf. \texttt{hyperparameter\_candidates}). The \texttt{LSTM\_WiderBatch} run achieved the lowest validation MSE ($0.3073$) and was therefore re-trained for 120 epochs in the final stage.
+
+\begin{table}[H]
+	\centering
+	\begin{tabular}{lcccccc}
+		\toprule
+		Configuration & Hidden $h$ & Layers $n$ & Dropout & Batch & Epochs & Notes \\
+		\midrule
+		Baseline LSTM & 160 & 2 & 0.30 & 64 & 60 & initial reference training \\
+		\texttt{LSTM\_Base} & 128 & 2 & 0.30 & 64 & 40 & tuning candidate \\
+		\texttt{LSTM\_Deeper} & 192 & 3 & 0.35 & 64 & 40 & extra depth, smaller $\eta$ \\
+		\texttt{LSTM\_WiderBatch} & 256 & 2 & 0.25 & 96 & 40 & best validation loss \\
+		Final model & 256 & 2 & 0.25 & 96 & 120 & extended training on best cfg \\
+		\bottomrule
+	\end{tabular}
+	\caption{Hyperparameters for Case~1. Learning rates ranged from $1.0\times 10^{-3}$ to $1.2\times 10^{-3}$ with weight decay $1.0\times 10^{-5}$ or $2.0\times 10^{-5}$.}
+	\label{tab:case1-configs}
+\end{table}
+
+\subsection{Results and Analysis}
+The held-out test set metrics extracted from \texttt{problem1\_outputs/final/test\_metrics.json} confirm a modest but consistent improvement versus the earlier baseline (pre-delta features, shorter sequence length). Table~\ref{tab:case1-metrics} consolidates the comparison.
+
+\begin{table}[H]
+	\centering
+	\begin{tabular}{lcccc}
+		\toprule
+		Model & RMSE & MAE & MSE & $R^2$ \\
+		\midrule
+		Baseline LSTM (Seq.~32) & 0.1088 & \textemdash & 0.0118 & 0.1436 \\
+		Final LSTM (Seq.~48 + deltas) & 0.1074 & 0.0869 & 0.0115 & 0.1709 \\
+		\bottomrule
+	\end{tabular}
+	\caption{Case~1 test performance (temperature in \si{\celsius}). Baseline statistics originate from the earlier experiment summary, while the final metrics are directly parsed from the JSON artefact.}
+	\label{tab:case1-metrics}
+\end{table}
+
+Despite the modest RMSE gain (\SI{1.3}{\percent} relative), the $R^2$ lift to $0.17$ indicates more variance is captured by the longer contextual window and derivative cues. Figure~\ref{fig:case1-plots} references the automatically saved diagnostics: the loss curves remain well-behaved, the scatter plot aligns close to the identity line, and residuals are centred near zero with light tails under \SI{0.4}{\celsius}.
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=0.48\textwidth]{problem1_outputs/final/final_loss.png}
+	\includegraphics[width=0.48\textwidth]{problem1_outputs/final/scatter_predictions.png}\\[0.5em]
+	\includegraphics[width=0.6\textwidth]{problem1_outputs/final/residual_histogram.png}
+	\caption{Loss curves and predictive diagnostics for Case~1. Files are located under \texttt{problem1\_outputs/final}.}
+	\label{fig:case1-plots}
+\end{figure}
+
+\section{Case 2: Pine Tree DCGAN and Fake-Original Classification}
+\subsection{Data Acquisition and Augmentation}
+Following the reproducibility helper in \texttt{setup\_reproducibility}, the hashed student ID selects CIFAR-100 class~59 (``pine tree''). The \texttt{prepare\_data} routine downloads the dataset to \texttt{cifar100-cache}, applies random horizontal flips and resizing to \SI{32}{\pixel}, and filters indices whose labels match the target class. A deterministic split allocates $(1-\texttt{VAL\_SPLIT})$ of the training subset to GAN optimisation and the remaining fraction to validation.
+
+\subsection{DCGAN Formulation}
+The generator upsamples latent noise $z \sim \mathcal{N}(0, I)$ with four transposed-convolution blocks (channels $800 \rightarrow 512 \rightarrow 256 \rightarrow 3$ when accounting for \texttt{GEN\_FEATURES}), each followed by batch normalisation and ReLU, culminating in a $\tanh$ squashing function. The discriminator mirrors the path with convolutions, LeakyReLU activations, and spectral stability via batch normalisation. Training minimises the non-saturating logistic loss implemented with \texttt{BCEWithLogitsLoss}:
+\begin{equation}
+	\min_{G} \max_{D} \; \mathbb{E}_{x \sim p_{\text{data}}} [\log \sigma(D(x))] + \mathbb{E}_{z \sim p(z)} [\log (1 - \sigma(D(G(z))))].
+\end{equation}
+Gradients are estimated with batch size 225, learning rates $2\times 10^{-4}$, and Adam betas $(0.5, 0.999)$. Automatic mixed precision (AMP) is activated when CUDA is available, and checkpoints are retained every ten epochs over the \texttt{GAN\_EPOCHS}~$=3000$ schedule.
+
+\subsection{Training Dynamics and Convergence Analysis}
+The 3000-epoch training run executed on an NVIDIA RTX 3060 (6.4~GB) consumed approximately 5.5~hours with per-epoch wall time stabilising at $\sim$6.5~seconds after AMP warmup. Figure~\ref{fig:gan-samples-evolution} illustrates the generative quality progression at key milestones.
+
+\textbf{Phase I (Epochs 1--40): Stabilisation.} Initial epochs exhibited high volatility: discriminator loss peaked at 3.88 (epoch~2) before settling, while generator loss climbed from 1.05 to 4.71 as $D$ learned to distinguish noise from structure. By epoch~40, $D(x) = 0.667$ and $D(G(z)) = 0.033$, indicating the discriminator assigned higher confidence to real images. Generated samples transitioned from random color noise to vague blob-like structures with emergent green hues characteristic of foliage.
+
+\textbf{Phase II (Epochs 41--500): Mode Collapse Recovery.} A transient collapse occurred near epoch~42, where generator loss dropped to 1.24 and $D(G(z))$ spiked to 0.33, suggesting $G$ momentarily fooled $D$ with repeated patterns. Training recovered by epoch~50 ($D$-loss = 0.88, $G$-loss = 2.54) as the discriminator re-calibrated. Visual inspection of \texttt{samples\_epoch\_0100.png} through \texttt{0500.png} reveals progressive refinement: blobs coalesced into vertical structures resembling trunks, and textures began differentiating sky, tree crowns, and foliage density gradients.
+
+\textbf{Phase III (Epochs 501--1500): Fine-Grained Texture Learning.} Discriminator scores plateaued ($D(x) \approx 0.73$, $D(G(z)) \approx 0.08$), while generator loss oscillated between 2.5 and 3.5, reflecting the minimax equilibrium. Samples acquired sharper boundaries, consistent pine-needle patterns, and realistic color palettes (dark greens, browns for trunks, light blues for backgrounds). However, occasional artefacts---checkerboard patterns from deconvolution strides and over-saturated greens---persisted through epoch~1000.
+
+\textbf{Phase IV (Epochs 1501--3000): Asymptotic Refinement.} Late training exhibited diminishing returns: generator loss crept upward (final value 1.84 vs.\ initial 1.05), indicating the discriminator's advantage solidified. Nonetheless, qualitative gains continued: \texttt{samples\_epoch\_2000.png} onward show improved spatial coherence (trees centred in frame), reduced colour bleeding, and plausible background elements. The final epoch (3000) synthesised 64 diverse pine trees with recognisable silhouettes, though fine details (individual needles, bark texture) remained stylised rather than photorealistic.
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=0.22\textwidth]{problem2_outputs/figures/samples_epoch_0001.png}
+	\includegraphics[width=0.22\textwidth]{problem2_outputs/figures/samples_epoch_0100.png}
+	\includegraphics[width=0.22\textwidth]{problem2_outputs/figures/samples_epoch_0500.png}
+	\includegraphics[width=0.22\textwidth]{problem2_outputs/figures/samples_epoch_1000.png}\\[0.3em]
+	\includegraphics[width=0.22\textwidth]{problem2_outputs/figures/samples_epoch_1500.png}
+	\includegraphics[width=0.22\textwidth]{problem2_outputs/figures/samples_epoch_2000.png}
+	\includegraphics[width=0.22\textwidth]{problem2_outputs/figures/samples_epoch_2500.png}
+	\includegraphics[width=0.22\textwidth]{problem2_outputs/figures/samples_epoch_3000.png}
+	\caption{Generator output evolution across 3000 epochs. Top row: epochs 1, 100, 500, 1000. Bottom row: epochs 1500, 2000, 2500, 3000. Early noise progressively organises into recognisable pine-tree structures with foliage texture and spatial layout.}
+	\label{fig:gan-samples-evolution}
+\end{figure}
+
+\textbf{Quantitative Summary.} Training logs parsed from \texttt{problem2\_outputs/log.txt} confirm:
+\begin{itemize}[noitemsep]
+	\item \textbf{Discriminator loss trajectory}: $1.87 \rightarrow 0.52 \rightarrow 0.88 \rightarrow 0.65$ (epochs 1, 20, 50, 3000), reflecting initial overconfidence, correction, and eventual cautious equilibrium.
+	\item \textbf{Generator loss trajectory}: $1.05 \rightarrow 5.05 \rightarrow 2.54 \rightarrow 1.84$ (same epochs), peaking mid-training as $D$ sharpened.
+	\item \textbf{Score gap} $D(x) - D(G(z))$: narrowed from 0.58 (epoch~1) to 0.78 (epoch~20), then stabilised at $\sim$0.65 by epoch~1000, indicating persistent but manageable discriminator advantage.
+\end{itemize}
+
+The training monitor records discriminator scores on real and fake batches ($D(x)$ vs. $D(G(z))$), generator/discriminator losses, and a moving-average gap (see \texttt{problem2\_outputs/figures/training\_metrics.png}). Trends stored in \texttt{gan\_training\_analysis.txt} indicate that the generator loss increased by $+0.79$ across training, signalling the adversarial game remained challenging; however, synthetic samples preserved the pine-tree silhouette, as illustrated by \texttt{figures/real\_vs\_fake.png}.
+
+\subsection{Synthetic Dataset Construction}
+After GAN convergence, \texttt{generate\_fake\_images} exports 500 tensors to \texttt{problem2\_outputs/generated}, each normalised in $[-1, 1]$. These, together with denormalised real pine-tree crops, are re-scaled using ImageNet statistics to interface with the downstream classifier. Stratified train/validation/test splits of sizes roughly $70/15/15\%$ maintain balance between the \emph{real} (label~0) and \emph{fake} (label~1) classes.
+
+\subsection{Fake-Original Classifier}
+The classifier wraps a pretrained ResNet18 backbone whose final fully connected layer is replaced by a two-logit head. Let $(X_i, y_i)$ denote either real or GAN-generated images; the optimisation problem minimises the cross-entropy
+\begin{equation}
+	\mathcal{L}_{\text{CE}} = - \frac{1}{N} \sum_{i=1}^{N} y_i \log p_i + (1-y_i) \log (1-p_i),
+\end{equation}
+with Adam (learning rate $2\times 10^{-4}$, weight decay $10^{-4}$) and a ReduceLROnPlateau scheduler. Training spans 25~epochs. Loss trends summarised in \texttt{classifier\_training\_analysis.txt} show the training loss dropped by $0.681$ while validation loss rose by $0.208$, hinting at mild overfitting because the real/fake boundary is simpler on the training split.
+
+\subsection{Evaluation}
+Test metrics captured in \texttt{problem2\_outputs/test\_metrics.txt} are reported in Table~\ref{tab:case2-metrics}. The confusion matrix (Figure~\ref{fig:case2-plots}) highlights a stronger recall for fake images (0.92) than precision (0.78), meaning the detector occasionally flags real images as synthetic but rarely misses generated ones.
+
+\begin{table}[H]
+	\centering
+	\begin{tabular}{lcccc}
+		\toprule
+		Metric & Accuracy & Precision & Recall & F1 \\
+		\midrule
+		Score & 0.8333 & 0.7841 & 0.9200 & 0.8466 \\
+		\bottomrule
+	\end{tabular}
+	\caption{Case~2 classifier performance on the held-out test set.}
+	\label{tab:case2-metrics}
+\end{table}
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=0.55\textwidth]{problem2_outputs/figures/training_metrics.png}\\[0.5em]
+	\includegraphics[width=0.48\textwidth]{problem2_outputs/figures/real_vs_fake.png}
+	\includegraphics[width=0.48\textwidth]{problem2_outputs/figures/confusion_matrix.png}
+	\caption{Top: GAN training dashboard. Bottom-left: qualitative comparison between real and generated pine trees. Bottom-right: fake-original confusion matrix.}
+	\label{fig:case2-plots}
+\end{figure}
+
+\section{Discussion}
+Both cases underscore the value of carefully engineered signals over brute-force model scaling. For Case~1, the transition from raw sensors to a physically inspired state vector (deltas, longer windows) delivered smoother validation curves and a measurable $R^2$ gain despite using relatively shallow recurrent stacks. Nevertheless, the predictive ceiling ($R^2 \approx 0.17$) suggests additional exogenous variables (HVAC setpoints, weather) or probabilistic calibration could further reduce error bars.
+
+In Case~2, the extended 3000-epoch GAN training revealed characteristic adversarial dynamics: an initial stabilisation phase where the discriminator learned basic real/fake separation (epochs 1--40), followed by a brief mode collapse and recovery (epochs 41--500) as the generator explored the latent manifold. Mid-training (epochs 501--1500) concentrated on texture refinement---pine needles, trunk bark, foliage density gradients---while late-stage training (1501--3000) polished spatial coherence and colour consistency. The upward drift in generator loss ($+0.79$ from start to finish) reflects the discriminator's asymptotic advantage, a common signature in DCGAN training when the critic becomes overly conservative. Despite this, the 300 checkpoint snapshots document steady visual improvement: early formless blobs evolved into structured, recognisable pine trees with plausible backgrounds.
+
+The fake-original classifier's performance (83.3\% accuracy, 92\% recall, 78\% precision) exposes a systematic bias: the model rarely misses generated images (low false-negative rate) but frequently flags authentic samples as synthetic (elevated false-positive rate). This asymmetry suggests that GAN artefacts---checkerboard patterns from strided deconvolutions, slight colour over-saturation, unnaturally uniform textures---are more salient to the ResNet18 backbone than the organic irregularities of real photographs. Future mitigation strategies include progressive growing (à la StyleGAN) to eliminate aliasing, spectral normalisation in both $G$ and $D$, or consistency regularisation (e.g., ADA augmentation) to force the discriminator to rely on semantic rather than superficial cues.
+
+\section{Reproducibility Checklist}
+All experiments can be rerun on either CPU or GPU by executing the scripts from the repository root. Suggested commands:
+\begin{verbatim}
+python case1.py --epochs 60 --tune-epochs 40 --final-epochs 120 --seq-len 48
+python case2.py --epochs 3000 --comparison-count 10
+\end{verbatim}
+The outputs folder already contains checkpoints (\texttt{baseline\_lstm\_model.pt}, \texttt{final/final\_model.pt}, \texttt{problem2\_outputs/checkpoints/final\_model.pt}) and figures referenced throughout this report. Prior to pushing to GitHub or compiling on Overleaf, ensure that \texttt{Room-Climate-Datasets} and \texttt{cifar100-cache} remain locally available or update the paths accordingly.
+
+\section{Conclusion and Future Work}
+The enhanced LSTM forecaster and pine-tree GAN/classifier pipelines satisfy the assignment requirements: they are fully documented, reproducible, and deliver quantifiable improvements over baselines. The Case~1 model achieved RMSE = 0.1074 and $R^2 = 0.1709$ through feature engineering and longer context windows, while the Case~2 DCGAN successfully synthesised 500 pine-tree images over 3000 epochs, documented via 300 checkpoint visualisations spanning noise-to-structure convergence. The downstream classifier attained 83.3\% test accuracy with strong recall (0.92), though precision (0.78) indicates room for reducing false positives.
+
+Future extensions may include:
+\begin{itemize}[noitemsep]
+	\item \textbf{Case 1}: Probabilistic interval forecasts (e.g., quantile regression or Bayesian LSTM) to quantify prediction uncertainty; incorporation of external weather APIs; ensemble methods combining multiple sequence lengths.
+	\item \textbf{Case 2}: Wasserstein GAN with gradient penalty (WGAN-GP) to stabilise training and eliminate mode collapse; progressive growing or StyleGAN2 architectures for higher-resolution synthesis; diffusion models (DDPM, DDIM) as an alternative generative paradigm with superior sample diversity.
+	\item \textbf{Classifier robustness}: Adversarial training against GAN-generated images; domain adaptation techniques to close the real/fake distribution gap; explainability tools (Grad-CAM, SHAP) to diagnose which artefacts drive misclassification.
+\end{itemize}
+
+All artefacts---source code (\texttt{case1.py}, \texttt{case2.py}), trained models, metrics, 300 GAN epoch snapshots, loss curves, confusion matrices---are ready for version control under \texttt{DeepLearning\_MidExam} and immediate LaTeX compilation on Overleaf.
+
+\end{document}

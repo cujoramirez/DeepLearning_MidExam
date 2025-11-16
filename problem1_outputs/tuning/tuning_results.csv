@@ -1,0 +1,4 @@
+name,best_val_loss,architecture,hidden_sizes,lstm_hidden,lstm_layers,seq_len,dropout,lr,weight_decay,batch_size,epochs,patience
+LSTM_Base,0.3129433585121735,lstm,"(128, 64, 32)",128,2,48,0.3,0.001,1e-05,64,40,15
+LSTM_Deeper,0.309004889926852,lstm,"(128, 64, 32)",192,3,48,0.35,0.0008,2e-05,64,40,18
+LSTM_WiderBatch,0.30728203641452584,lstm,"(128, 64, 32)",256,2,48,0.25,0.0012,1e-05,96,40,15

@@ -1,0 +1,112 @@
+BINUS University
+FM-BINUS-AA-FPU-78/V2R5
+
+Academic Career:
+Undergraduate
+
+Class Program:
+Regular
+
+☒ Mid Exam ☐ Others Exam : _____________________
+☐ Final Exam
+
+Term : Odd
+Period (Only for BINUS Online/ Master): 1 / 2*)
+
+☒ Kemanggisan ☐ Senayan ☐ Semarang
+☒ Alam Sutera ☐ Bandung ☐ Medan
+☒ Bekasi ☐ Malang ☐ BiOn
+
+Academic Year :
+2025 / 2026
+
+Exam Type* : Onsite / Online / Take Home
+Faculty / Dept. : School of Computer Science
+Day / Date** : Monday / November 17th, 2025
+Code - Course : COMP6826001 – Deep Learning
+Time** : 13:00 – 14:40
+Exam Specification*** :
+☐ Open Book ☐ Open Notes
+☐ Close Book ☐ Oral Test
+☐ Open E-Book
+Class : All Classes
+
+Equipment*** :
+☐ Examination Booklet
+☐ Calculator
+☐ Dictionary
+☐ Laptop
+☐ Tablet
+☐ Smartphone
+☐ Drawing Paper – A3
+☐ Drawing Paper – A2
+☐ Notes: ______ sheet
+Student ID *** : _____________________
+Name *** : _____________________
+Signature *** : _____________________
+
+*) Strikethrough the unnecessary items **) For Online Exam, this is the due date ***) Only for Onsite Exam
+
+Please insert the test paper into the examination booklet and submit both papers after the test.
+
+The penalty for CHEATING is DROP OUT!
+
+Learning Outcome
+
+LO 1: Execute structured deep learning experimentation workflows, including data preparation, model training, and evaluation
+LO 2: Construct deep learning models using modern programming tools and frameworks
+LO 3: Analyze the behavior and performance of theoretical and practical deep learning models under various training scenarios
+LO 4: Evaluate the suitability and limitations of different deep learning approaches for solving real-world problems across domains
+
+I. Case (100%)
+
+1. [LO 1, LO 2, LO 3, LO 4 – 30 points] Deep learning for room temperature prediction.
+
+Instruction:
+
+Clone the following repository: https://github.com/wawancenggoro/Room-Climate-Datasets
+
+Add your student ID in get_dataset_part.ipynb in the repository, then run the notebook
+
+Use the files as printed in the notebook as your dataset
+
+TODOS:
+a. [10 points] Construct and train a deep learning model with temperature, relative humidity, light sensor 1, and light sensor 2 as input, and the temperature of the next timestamp (next row in the csv files) as the label. You can set each of the hyperparameters to any value.
+b. [5 points] Plot the training and validation losses over epochs, analyze and explain what happens in the training based on the plot.
+c. [10 points] Do hyperparameter tuning to improve the deep learning model based on the result of point b and any other results you get from the training process.
+d. [5 points] Test the model on a separate test set with appropriate metrics
+
+2. [LO 1, LO 2, LO 3, LO 4 – 70 points] Deep learning for AI-generated image prediction.
+
+Instruction:
+
+Clone the following repository: https://github.com/wawancenggoro/CIFAR-100-dataset
+
+Add your student ID in get_class_to_work.ipynb in the repository, then run the notebook
+
+Use the class as printed in the notebook from the train folder as your training dataset
+
+TODOS:
+a. [10 points] Construct and train a deep learning model as an image generator by using the images in your training dataset to train the model.
+b. [5 points] Plot the training and validation losses over epochs, analyze, and explain what happened in the generative training based on the plot.
+c. [10 points] Generate 500 images by using the trained model from point a.
+d. [5 points] Compare 10 generated images and 10 original images, analyze and explain the comparison.
+e. [10 points] Construct a new dataset for classification with 2 classes: original and fake. Use your original training dataset as the original class and the generated images from point b as the fake class.
+f. [10 points] Construct and train a deep learning model to classify original versus fake images by using the dataset from point d.
+g. [5 points] Plot the training and validation losses over epochs, analyze, and explain what happened in the classification training based on the plot.
+h. [10 points] Do hyperparameter tuning to improve the deep learning model based on the result of point b and any other results you get from the training process.
+i. [5 points] Test the classification model on a separate test set with appropriate metrics.
+
+--Good Luck --
+
+Verified by Program,
+
+Henry Lucky (D6660)
+Oct 17, 2025
+
+Page 2 of 2
+
+Google Search Suggestions
+Display of Search Suggestions is required when using Grounding with Google Search. Learn more
+BINUS University exam paper transcript
+Deep learning exam questions and instructions

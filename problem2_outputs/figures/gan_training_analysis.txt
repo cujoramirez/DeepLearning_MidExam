@@ -1,0 +1,2 @@
+Generator train loss increased by 0.793 from 1.047 to 1.839
+Generator val loss increased by 0.498 from 0.592 to 1.090
