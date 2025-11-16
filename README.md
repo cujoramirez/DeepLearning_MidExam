@@ -72,7 +72,7 @@ See `problem1_outputs/final/test_metrics.json` for full results.
 
 ### Results
 **GAN Training:**
-- 3000 epochs completed in ~5.5 hours on RTX 3060
+- 3000 epochs completed in ~23.5 hours on RTX 3060
 - 300 checkpoint visualizations documenting convergence
 - Generator evolved from noise to recognizable pine tree structures
 
@@ -158,7 +158,7 @@ The comprehensive scientific report (`report.txt`) includes:
 
 - **GPU:** NVIDIA GeForce RTX 3060 Laptop (6.4 GB VRAM)
 - **Framework:** PyTorch 2.x with automatic mixed precision (AMP)
-- **Training Time:** ~5.5 hours for DCGAN, ~2 hours for LSTM experiments
+- **Training Time:** ~23.5 hours for DCGAN, ~15 minutes for LSTM experiments
 
 ## License
 
