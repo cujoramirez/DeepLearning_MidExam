@@ -17,8 +17,6 @@ This repository contains the complete implementation and report for the Deep Lea
 deeplearning/
 ├── case1.py                    # Case 1: LSTM temperature forecasting
 ├── case2.py                    # Case 2: DCGAN + classifier pipeline
-├── report.txt                  # Comprehensive LaTeX report
-├── exam.txt                    # Assignment specifications
 ├── problem1_outputs/           # Case 1 results
 │   ├── baseline_lstm_model.pt
 │   ├── final/
